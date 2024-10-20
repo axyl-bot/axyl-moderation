@@ -29,6 +29,7 @@ impl EventHandler for Handler {
                 "mute" => mute(&ctx, &command).await,
                 "unmute" => unmute(&ctx, &command).await,
                 "warn" => warn(&ctx, &command).await,
+                "strip_roles" => strip_roles(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -125,6 +126,16 @@ impl EventHandler for Handler {
                             "reason",
                             "Reason for warning",
                         )),
+                    CreateCommand::new("strip_roles")
+                        .description("Remove all roles from a user")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to strip roles from",
+                            )
+                            .required(true),
+                        ),
                 ],
             )
             .await;

@@ -214,3 +214,32 @@ pub async fn warn(ctx: &Context, command: &CommandInteraction) -> String {
         Err(_) => format!("Failed to create DM channel for <@{}>", user),
     }
 }
+
+pub async fn strip_roles(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_ROLES).await {
+        return "You don't have permission to manage roles".to_string();
+    }
+
+    let options = &command.data.options;
+    let user = options
+        .iter()
+        .find(|opt| opt.name == "user")
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
+
+    let guild = command.guild_id.unwrap();
+    let member = match guild.member(&ctx.http, user).await {
+        Ok(m) => m,
+        Err(why) => return format!("Failed to fetch member: {}", why),
+    };
+
+    let roles: Vec<RoleId> = member.roles.clone();
+    if roles.is_empty() {
+        return format!("<@{}> has no roles to remove", user);
+    }
+
+    match member.remove_roles(&ctx.http, &roles).await {
+        Ok(_) => format!("Successfully stripped all roles from <@{}>", user),
+        Err(why) => format!("Failed to strip roles: {}", why),
+    }
+}
