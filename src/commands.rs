@@ -13,7 +13,10 @@ async fn check_permissions(
     println!("Checking permissions for user: {}", command.user.name);
     println!("Required permission: {:?}", required_permission);
 
-    if member.permissions.unwrap_or_default().contains(Permissions::ADMINISTRATOR)
+    if member
+        .permissions
+        .unwrap_or_default()
+        .contains(Permissions::ADMINISTRATOR)
         || guild.owner_id == command.user.id
     {
         println!("User is an administrator or the guild owner");
@@ -26,11 +29,15 @@ async fn check_permissions(
     for role_id in role_ids {
         if let Some(role) = guild.roles.get(&role_id) {
             println!("Role {:?} permissions: {:?}", role.name, role.permissions);
-            
+
             for i in 0..64 {
                 let permission = Permissions::from_bits(1 << i).unwrap_or(Permissions::empty());
-                if role.permissions.contains(permission) && required_permission.contains(permission) {
-                    println!("User has the required permission {:?} through role: {:?}", permission, role.name);
+                if role.permissions.contains(permission) && required_permission.contains(permission)
+                {
+                    println!(
+                        "User has the required permission {:?} through role: {:?}",
+                        permission, role.name
+                    );
                     return true;
                 }
             }
