@@ -53,126 +53,112 @@ impl EventHandler for Handler {
             OnlineStatus::DoNotDisturb,
         );
 
-        let commands = Command::set_global_commands(
-            &ctx.http,
-            vec![
-                CreateCommand::new("kick")
-                    .description("Kick a user")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to kick",
-                        )
-                        .required(true),
-                    )
-                    .add_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "reason",
-                        "Reason for kicking",
-                    )),
-                CreateCommand::new("ban")
-                    .description("Ban a user")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to ban",
-                        )
-                        .required(true),
-                    )
-                    .add_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "reason",
-                        "Reason for banning",
-                    )),
-                CreateCommand::new("mute")
-                    .description("Mute a user (default: 28 days)")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to mute",
-                        )
-                        .required(true),
-                    )
-                    .add_option(CreateCommandOption::new(
-                        CommandOptionType::Integer,
-                        "duration",
-                        "Mute duration in minutes (optional)",
-                    )),
-                CreateCommand::new("unmute")
-                    .description("Unmute a user")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to unmute",
-                        )
-                        .required(true),
-                    ),
-                CreateCommand::new("warn")
-                    .description("Warn a user")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to warn",
-                        )
-                        .required(true),
-                    )
-                    .add_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "reason",
-                        "Reason for warning",
-                    )),
-                CreateCommand::new("strip_roles")
-                    .description("Remove all roles from a user")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to strip roles from",
-                        )
-                        .required(true),
-                    ),
-                CreateCommand::new("purge")
-                    .description("Purge a specified number of messages")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::Integer,
-                            "amount",
-                            "Number of messages to purge (max 100)",
-                        )
-                        .required(true)
-                        .min_int_value(1)
-                        .max_int_value(100),
-                    ),
-                CreateCommand::new("mass_role")
-                    .description("Give a user all available roles")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to give all roles to",
-                        )
-                        .required(true),
-                    ),
-                CreateCommand::new("role_all")
-                    .description("Add a specified role to all members in the server")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::Role,
-                            "role",
-                            "The role to add to all members",
-                        )
-                        .required(true),
-                    ),
-            ],
-        )
-        .await;
+        if let Err(why) = Command::set_global_commands(&ctx.http, vec![]).await {
+            println!("Failed to delete global commands: {:?}", why);
+            return;
+        }
 
-        println!("Global slash commands registered: {:#?}", commands);
+        println!("Deleted all existing global commands.");
+
+        let commands = vec![
+            CreateCommand::new("kick")
+                .description("Kick a user")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to kick")
+                        .required(true),
+                )
+                .add_option(CreateCommandOption::new(
+                    CommandOptionType::String,
+                    "reason",
+                    "Reason for kicking",
+                )),
+            CreateCommand::new("ban")
+                .description("Ban a user")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to ban")
+                        .required(true),
+                )
+                .add_option(CreateCommandOption::new(
+                    CommandOptionType::String,
+                    "reason",
+                    "Reason for banning",
+                )),
+            CreateCommand::new("mute")
+                .description("Mute a user (default: 28 days)")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to mute")
+                        .required(true),
+                )
+                .add_option(CreateCommandOption::new(
+                    CommandOptionType::Integer,
+                    "duration",
+                    "Mute duration in minutes (optional)",
+                )),
+            CreateCommand::new("unmute")
+                .description("Unmute a user")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to unmute")
+                        .required(true),
+                ),
+            CreateCommand::new("warn")
+                .description("Warn a user")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to warn")
+                        .required(true),
+                )
+                .add_option(CreateCommandOption::new(
+                    CommandOptionType::String,
+                    "reason",
+                    "Reason for warning",
+                )),
+            CreateCommand::new("strip_roles")
+                .description("Remove all roles from a user")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user to strip roles from",
+                    )
+                    .required(true),
+                ),
+            CreateCommand::new("purge")
+                .description("Purge a specified number of messages")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Integer,
+                        "amount",
+                        "Number of messages to purge (max 100)",
+                    )
+                    .required(true)
+                    .min_int_value(1)
+                    .max_int_value(100),
+                ),
+            CreateCommand::new("mass_role")
+                .description("Give a user all available roles")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user to give all roles to",
+                    )
+                    .required(true),
+                ),
+            CreateCommand::new("role_all")
+                .description("Add a specified role to all members in the server")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Role,
+                        "role",
+                        "The role to add to all members",
+                    )
+                    .required(true),
+                ),
+        ];
+
+        match Command::set_global_commands(&ctx.http, commands).await {
+            Ok(cmds) => println!("Successfully registered {} global commands", cmds.len()),
+            Err(why) => println!("Failed to register global commands: {:?}", why),
+        }
     }
 }
 
