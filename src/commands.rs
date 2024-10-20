@@ -23,7 +23,7 @@ async fn check_permissions(
         return true;
     }
 
-    let role_ids: Vec<RoleId> = member.roles.iter().cloned().collect();
+    let role_ids: Vec<RoleId> = member.roles.to_vec();
     println!("User roles: {:?}", role_ids);
 
     for role_id in role_ids {
