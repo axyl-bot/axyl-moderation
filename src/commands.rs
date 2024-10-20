@@ -351,11 +351,54 @@ pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
 
     let mut response = String::new();
     if !added_roles.is_empty() {
-        response.push_str(&format!("Successfully added {} roles to <@{}>. ", added_roles.len(), user));
+        response.push_str(&format!(
+            "Successfully added {} roles to <@{}>. ",
+            added_roles.len(),
+            user
+        ));
     }
     if !failed_roles.is_empty() {
         response.push_str(&format!("Failed to add {} roles. ", failed_roles.len()));
     }
 
     response
+}
+
+pub async fn role_all(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_ROLES).await {
+        return "You don't have permission to manage roles".to_string();
+    }
+
+    let options = &command.data.options;
+    let role_id = options
+        .iter()
+        .find(|opt| opt.name == "role")
+        .and_then(|opt| opt.value.as_role_id())
+        .unwrap();
+
+    let guild = command.guild_id.unwrap();
+    let members = match guild.members(&ctx.http, None, None).await {
+        Ok(m) => m,
+        Err(why) => return format!("Failed to fetch members: {}", why),
+    };
+
+    let mut success_count = 0;
+    let mut fail_count = 0;
+
+    for member in members {
+        if !member.roles.contains(&role_id) {
+            match member.add_role(&ctx.http, role_id).await {
+                Ok(_) => success_count += 1,
+                Err(why) => {
+                    println!("Failed to add role to {:?}: {:?}", member.user.name, why);
+                    fail_count += 1;
+                }
+            }
+        }
+    }
+
+    format!(
+        "Role added to {} members. Failed for {} members.",
+        success_count, fail_count
+    )
 }

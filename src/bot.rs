@@ -32,6 +32,7 @@ impl EventHandler for Handler {
                 "strip_roles" => strip_roles(&ctx, &command).await,
                 "purge" => purge(&ctx, &command).await,
                 "mass_role" => mass_role(&ctx, &command).await,
+                "role_all" => role_all(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -157,6 +158,16 @@ impl EventHandler for Handler {
                                 CommandOptionType::User,
                                 "user",
                                 "The user to give all roles to",
+                            )
+                            .required(true),
+                        ),
+                    CreateCommand::new("role_all")
+                        .description("Add a specified role to all members in the server")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::Role,
+                                "role",
+                                "The role to add to all members",
                             )
                             .required(true),
                         ),
