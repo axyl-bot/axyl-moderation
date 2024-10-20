@@ -1,6 +1,19 @@
 [package]
-name = "axyl-moderation"
+name = "axyl_moderation"
 version = "0.1.0"
+authors = ["Nyx <nnyyxxxx@protonmail.com>", "Adam Perkowski <adas1per@protonmail.com>", "AxylOS <lead@axylprojects.dev>"]
+license = "GPL-2.0"
+description = "Discord bot for moderation"
+repository = "https://github.com/axyl-bot/axyl-moderation.git"
+readme = "readme.md"
+keywords = [
+    "discord",
+    "bot",
+    "moderation",
+]
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.28", features = ["full"] }
+serenity = { version = "0.12.2", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
+chrono = "0.4"
