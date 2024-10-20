@@ -4,51 +4,41 @@ use serenity::all::*;
 async fn check_permissions(
     ctx: &Context,
     command: &CommandInteraction,
-    permission: Permissions,
+    required_permission: Permissions,
 ) -> bool {
     let guild_id = command.guild_id.unwrap();
     let guild = guild_id.to_partial_guild(&ctx.http).await.unwrap();
     let member = guild.member(&ctx.http, command.user.id).await.unwrap();
 
     println!("Checking permissions for user: {}", command.user.name);
-    println!("Required permission: {:?}", permission);
+    println!("Required permission: {:?}", required_permission);
 
-    if member
-        .permissions
-        .unwrap_or_default()
-        .contains(Permissions::ADMINISTRATOR)
+    if member.permissions.unwrap_or_default().contains(Permissions::ADMINISTRATOR)
+        || guild.owner_id == command.user.id
     {
-        println!("User is an administrator");
-        return true;
-    }
-
-    if guild.owner_id == command.user.id {
-        println!("User is the guild owner");
+        println!("User is an administrator or the guild owner");
         return true;
     }
 
     let role_ids: Vec<RoleId> = member.roles.iter().cloned().collect();
     println!("User roles: {:?}", role_ids);
 
-    let mut permissions = Permissions::empty();
     for role_id in role_ids {
         if let Some(role) = guild.roles.get(&role_id) {
-            permissions |= role.permissions;
             println!("Role {:?} permissions: {:?}", role.name, role.permissions);
-            if role.permissions.contains(Permissions::ADMINISTRATOR) {
-                println!("User has administrator role");
-                return true;
+            
+            for i in 0..64 {
+                let permission = Permissions::from_bits(1 << i).unwrap_or(Permissions::empty());
+                if role.permissions.contains(permission) && required_permission.contains(permission) {
+                    println!("User has the required permission {:?} through role: {:?}", permission, role.name);
+                    return true;
+                }
             }
         }
     }
 
-    println!("Final calculated permissions: {:?}", permissions);
-    println!(
-        "Has required permission: {}",
-        permissions.contains(permission)
-    );
-
-    permissions.contains(permission)
+    println!("User does not have the required permission");
+    false
 }
 
 pub async fn kick(ctx: &Context, command: &CommandInteraction) -> String {
