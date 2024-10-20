@@ -30,6 +30,7 @@ impl EventHandler for Handler {
                 "unmute" => unmute(&ctx, &command).await,
                 "warn" => warn(&ctx, &command).await,
                 "strip_roles" => strip_roles(&ctx, &command).await,
+                "purge" => purge(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -135,6 +136,18 @@ impl EventHandler for Handler {
                                 "The user to strip roles from",
                             )
                             .required(true),
+                        ),
+                    CreateCommand::new("purge")
+                        .description("Purge a specified number of messages")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::Integer,
+                                "amount",
+                                "Number of messages to purge (max 100)",
+                            )
+                            .required(true)
+                            .min_int_value(1)
+                            .max_int_value(100),
                         ),
                 ],
             )

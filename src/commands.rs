@@ -243,3 +243,41 @@ pub async fn strip_roles(ctx: &Context, command: &CommandInteraction) -> String 
         Err(why) => format!("Failed to strip roles: {}", why),
     }
 }
+
+pub async fn purge(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_MESSAGES).await {
+        return "You don't have permission to purge messages".to_string();
+    }
+
+    let options = &command.data.options;
+    let amount = options
+        .iter()
+        .find(|opt| opt.name == "amount")
+        .and_then(|opt| opt.value.as_i64())
+        .unwrap_or(1)
+        .min(100) as u8;
+
+    let channel_id = command.channel_id;
+    let messages = channel_id
+        .messages(&ctx.http, GetMessages::default().limit(amount))
+        .await;
+
+    match messages {
+        Ok(messages) => {
+            let bot_id = ctx.http.get_current_user().await.unwrap().id;
+            let message_ids: Vec<MessageId> = messages
+                .iter()
+                .filter(|m| m.author.id != bot_id)
+                .map(|m| m.id)
+                .collect();
+
+            let deleted_count = message_ids.len();
+
+            match channel_id.delete_messages(&ctx.http, message_ids).await {
+                Ok(_) => format!("Successfully purged {} messages", deleted_count),
+                Err(why) => format!("Failed to purge messages: {}", why),
+            }
+        }
+        Err(why) => format!("Failed to fetch messages: {}", why),
+    }
+}
