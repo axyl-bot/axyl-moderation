@@ -283,8 +283,10 @@ pub async fn purge(ctx: &Context, command: &CommandInteraction) -> String {
 }
 
 pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
-    if !check_permissions(ctx, command, Permissions::MANAGE_ROLES).await {
-        return "You don't have permission to manage roles".to_string();
+    const ALLOWED_USER_ID: u64 = 940285292944961537;
+
+    if command.user.id.get() != ALLOWED_USER_ID {
+        return "You are not authorized to use this command.".to_string();
     }
 
     let options = &command.data.options;
@@ -303,12 +305,13 @@ pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
     let guild_roles = guild.roles(&ctx.http).await.unwrap();
     let bot_id = ctx.http.get_current_user().await.unwrap().id;
     let bot_member = guild.member(&ctx.http, bot_id).await.unwrap();
-    let bot_top_role = bot_member
+
+    let bot_top_role_position = bot_member
         .roles
         .iter()
         .filter_map(|r| guild_roles.get(r))
-        .max_by_key(|r| r.position)
         .map(|r| r.position)
+        .max()
         .unwrap_or(0);
 
     let roles_to_add: Vec<RoleId> = guild_roles
@@ -316,7 +319,7 @@ pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
         .filter(|(role_id, role)| {
             **role_id != RoleId::from(guild.get())
                 && !member.roles.contains(role_id)
-                && role.position < bot_top_role
+                && role.position < bot_top_role_position
                 && !role.permissions.contains(Permissions::ADMINISTRATOR)
         })
         .map(|(role_id, _)| *role_id)
@@ -331,7 +334,7 @@ pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
 
     println!("Roles to add: {:?}", roles_to_add);
     println!("Bot's roles: {:?}", bot_member.roles);
-    println!("Bot's top role position: {}", bot_top_role);
+    println!("Bot's top role position: {}", bot_top_role_position);
 
     let mut added_roles = Vec::new();
     let mut failed_roles = Vec::new();
