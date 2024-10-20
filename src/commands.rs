@@ -281,3 +281,78 @@ pub async fn purge(ctx: &Context, command: &CommandInteraction) -> String {
         Err(why) => format!("Failed to fetch messages: {}", why),
     }
 }
+
+pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_ROLES).await {
+        return "You don't have permission to manage roles".to_string();
+    }
+
+    let options = &command.data.options;
+    let user = options
+        .iter()
+        .find(|opt| opt.name == "user")
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
+
+    let guild = command.guild_id.unwrap();
+    let member = match guild.member(&ctx.http, user).await {
+        Ok(m) => m,
+        Err(why) => return format!("Failed to fetch member: {}", why),
+    };
+
+    let guild_roles = guild.roles(&ctx.http).await.unwrap();
+    let bot_id = ctx.http.get_current_user().await.unwrap().id;
+    let bot_member = guild.member(&ctx.http, bot_id).await.unwrap();
+    let bot_top_role = bot_member
+        .roles
+        .iter()
+        .filter_map(|r| guild_roles.get(r))
+        .max_by_key(|r| r.position)
+        .map(|r| r.position)
+        .unwrap_or(0);
+
+    let roles_to_add: Vec<RoleId> = guild_roles
+        .iter()
+        .filter(|(role_id, role)| {
+            **role_id != RoleId::from(guild.get())
+                && !member.roles.contains(role_id)
+                && role.position < bot_top_role
+                && !role.permissions.contains(Permissions::ADMINISTRATOR)
+        })
+        .map(|(role_id, _)| *role_id)
+        .collect();
+
+    if roles_to_add.is_empty() {
+        return format!(
+            "<@{}> already has all available roles that can be assigned",
+            user
+        );
+    }
+
+    println!("Roles to add: {:?}", roles_to_add);
+    println!("Bot's roles: {:?}", bot_member.roles);
+    println!("Bot's top role position: {}", bot_top_role);
+
+    let mut added_roles = Vec::new();
+    let mut failed_roles = Vec::new();
+
+    for role_id in roles_to_add {
+        match member.add_role(&ctx.http, role_id).await {
+            Ok(_) => added_roles.push(role_id),
+            Err(why) => {
+                println!("Failed to add role {:?}: {:?}", role_id, why);
+                failed_roles.push(role_id);
+            }
+        }
+    }
+
+    let mut response = String::new();
+    if !added_roles.is_empty() {
+        response.push_str(&format!("Successfully added {} roles to <@{}>. ", added_roles.len(), user));
+    }
+    if !failed_roles.is_empty() {
+        response.push_str(&format!("Failed to add {} roles. ", failed_roles.len()));
+    }
+
+    response
+}

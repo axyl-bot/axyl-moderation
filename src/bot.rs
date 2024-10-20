@@ -31,6 +31,7 @@ impl EventHandler for Handler {
                 "warn" => warn(&ctx, &command).await,
                 "strip_roles" => strip_roles(&ctx, &command).await,
                 "purge" => purge(&ctx, &command).await,
+                "mass_role" => mass_role(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -148,6 +149,16 @@ impl EventHandler for Handler {
                             .required(true)
                             .min_int_value(1)
                             .max_int_value(100),
+                        ),
+                    CreateCommand::new("mass_role")
+                        .description("Give a user all available roles")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to give all roles to",
+                            )
+                            .required(true),
                         ),
                 ],
             )
