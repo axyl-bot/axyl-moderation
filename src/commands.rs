@@ -245,41 +245,31 @@ pub async fn strip_roles(ctx: &Context, command: &CommandInteraction) -> String 
 }
 
 pub async fn purge(ctx: &Context, command: &CommandInteraction) -> String {
-    if !check_permissions(ctx, command, Permissions::MANAGE_MESSAGES).await {
-        return "You don't have permission to purge messages".to_string();
-    }
-
-    let options = &command.data.options;
-    let amount = options
-        .iter()
-        .find(|opt| opt.name == "amount")
-        .and_then(|opt| opt.value.as_i64())
-        .unwrap_or(1)
-        .min(100) as u8;
-
+    let amount = command.data.options[0].value.as_i64().unwrap();
     let channel_id = command.channel_id;
+
+    let amount = u8::try_from(amount.min(100)).unwrap_or(100);
+
     let messages = channel_id
-        .messages(&ctx.http, GetMessages::default().limit(amount))
+        .messages(&ctx.http, GetMessages::default().limit(amount + 1))
         .await;
 
-    match messages {
-        Ok(messages) => {
-            let bot_id = ctx.http.get_current_user().await.unwrap().id;
-            let message_ids: Vec<MessageId> = messages
-                .iter()
-                .filter(|m| m.author.id != bot_id)
-                .map(|m| m.id)
-                .collect();
-
-            let deleted_count = message_ids.len();
-
-            match channel_id.delete_messages(&ctx.http, message_ids).await {
-                Ok(_) => format!("Successfully purged {} messages", deleted_count),
-                Err(why) => format!("Failed to purge messages: {}", why),
-            }
-        }
-        Err(why) => format!("Failed to fetch messages: {}", why),
+    if let Err(why) = messages {
+        return format!("Failed to fetch messages: {}", why);
     }
+
+    let messages = messages.unwrap();
+    let message_ids: Vec<MessageId> = messages.iter().skip(1).map(|m| m.id).collect();
+
+    if message_ids.is_empty() {
+        return "No messages to delete.".to_string();
+    }
+
+    if let Err(why) = channel_id.delete_messages(&ctx.http, &message_ids).await {
+        return format!("Failed to delete messages: {}", why);
+    }
+
+    format!("Successfully purged {} messages", message_ids.len())
 }
 
 pub async fn mass_role(ctx: &Context, command: &CommandInteraction) -> String {
