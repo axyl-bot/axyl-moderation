@@ -57,11 +57,14 @@ impl EventHandler for Handler {
                 vec![
                     CreateCommand::new("kick")
                         .description("Kick a user")
-                        .add_option(CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to kick",
-                        ).required(true))
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to kick",
+                            )
+                            .required(true),
+                        )
                         .add_option(CreateCommandOption::new(
                             CommandOptionType::String,
                             "reason",
@@ -69,42 +72,54 @@ impl EventHandler for Handler {
                         )),
                     CreateCommand::new("ban")
                         .description("Ban a user")
-                        .add_option(CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to ban",
-                        ).required(true))
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to ban",
+                            )
+                            .required(true),
+                        )
                         .add_option(CreateCommandOption::new(
                             CommandOptionType::String,
                             "reason",
                             "Reason for banning",
                         )),
                     CreateCommand::new("mute")
-                        .description("Mute a user")
-                        .add_option(CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to mute",
-                        ).required(true))
+                        .description("Mute a user (default: 28 days)")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to mute",
+                            )
+                            .required(true),
+                        )
                         .add_option(CreateCommandOption::new(
                             CommandOptionType::Integer,
                             "duration",
-                            "Mute duration in minutes",
+                            "Mute duration in minutes (optional)",
                         )),
                     CreateCommand::new("unmute")
                         .description("Unmute a user")
-                        .add_option(CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to unmute",
-                        ).required(true)),
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to unmute",
+                            )
+                            .required(true),
+                        ),
                     CreateCommand::new("warn")
                         .description("Warn a user")
-                        .add_option(CreateCommandOption::new(
-                            CommandOptionType::User,
-                            "user",
-                            "The user to warn",
-                        ).required(true))
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::User,
+                                "user",
+                                "The user to warn",
+                            )
+                            .required(true),
+                        )
                         .add_option(CreateCommandOption::new(
                             CommandOptionType::String,
                             "reason",

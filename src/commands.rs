@@ -1,7 +1,11 @@
+use chrono::{Duration, Utc};
 use serenity::all::*;
-use chrono::Utc;
 
-async fn check_permissions(ctx: &Context, command: &CommandInteraction, permission: Permissions) -> bool {
+async fn check_permissions(
+    ctx: &Context,
+    command: &CommandInteraction,
+    permission: Permissions,
+) -> bool {
     let guild_id = command.guild_id.unwrap();
     let guild = guild_id.to_partial_guild(&ctx.http).await.unwrap();
     let member = guild.member(&ctx.http, command.user.id).await.unwrap();
@@ -9,7 +13,11 @@ async fn check_permissions(ctx: &Context, command: &CommandInteraction, permissi
     println!("Checking permissions for user: {}", command.user.name);
     println!("Required permission: {:?}", permission);
 
-    if member.permissions.unwrap_or_default().contains(Permissions::ADMINISTRATOR) {
+    if member
+        .permissions
+        .unwrap_or_default()
+        .contains(Permissions::ADMINISTRATOR)
+    {
         println!("User is an administrator");
         return true;
     }
@@ -35,7 +43,10 @@ async fn check_permissions(ctx: &Context, command: &CommandInteraction, permissi
     }
 
     println!("Final calculated permissions: {:?}", permissions);
-    println!("Has required permission: {}", permissions.contains(permission));
+    println!(
+        "Has required permission: {}",
+        permissions.contains(permission)
+    );
 
     permissions.contains(permission)
 }
@@ -116,7 +127,9 @@ pub async fn mute(ctx: &Context, command: &CommandInteraction) -> String {
         .iter()
         .find(|opt| opt.name == "duration")
         .and_then(|opt| opt.value.as_i64())
-        .unwrap_or(60);
+        .unwrap_or(28 * 24 * 60);
+
+    let duration = duration.min(28 * 24 * 60);
 
     let guild = command.guild_id.unwrap();
     let mut member = match guild.member(&ctx.http, user).await {
@@ -124,11 +137,23 @@ pub async fn mute(ctx: &Context, command: &CommandInteraction) -> String {
         Err(why) => return format!("Failed to fetch member: {}", why),
     };
 
-    let mute_until = Utc::now() + chrono::Duration::minutes(duration);
+    let mute_until = Utc::now() + Duration::minutes(duration);
     let mute_until = Timestamp::from_unix_timestamp(mute_until.timestamp()).unwrap();
 
-    match member.disable_communication_until_datetime(&ctx.http, mute_until).await {
-        Ok(_) => format!("Successfully muted <@{}> for {} minutes", user, duration),
+    match member
+        .disable_communication_until_datetime(&ctx.http, mute_until)
+        .await
+    {
+        Ok(_) => {
+            if duration == 28 * 24 * 60 {
+                format!(
+                    "Successfully muted <@{}> for 28 days (maximum duration)",
+                    user
+                )
+            } else {
+                format!("Successfully muted <@{}> for {} minutes", user, duration)
+            }
+        }
         Err(why) => format!("Failed to mute user: {}. Error details: {:?}", user, why),
     }
 }
@@ -174,11 +199,14 @@ pub async fn warn(ctx: &Context, command: &CommandInteraction) -> String {
         .unwrap_or("No reason provided");
 
     let dm_channel = user.create_dm_channel(&ctx.http).await;
-    
+
     match dm_channel {
         Ok(channel) => {
             if let Err(why) = channel
-                .say(&ctx.http, &format!("You have been warned. Reason: {}", reason))
+                .say(
+                    &ctx.http,
+                    &format!("You have been warned. Reason: {}", reason),
+                )
                 .await
             {
                 format!("Failed to send warning DM: {}", why)
