@@ -33,6 +33,8 @@ impl EventHandler for Handler {
                 "purge" => purge(&ctx, &command).await,
                 "mass_role" => mass_role(&ctx, &command).await,
                 "role_all" => role_all(&ctx, &command).await,
+                "purge_user" => purge_user(&ctx, &command).await,
+                "purge_role" => purge_role(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -40,7 +42,7 @@ impl EventHandler for Handler {
                 .edit_response(&ctx.http, EditInteractionResponse::new().content(content))
                 .await
             {
-                println!("Cannot edit slash command response: {}", why);
+                println!("Cannot respond to slash command: {}", why);
             }
         }
     }
@@ -166,6 +168,44 @@ impl EventHandler for Handler {
                         "The role to add to all members",
                     )
                     .required(true),
+                ),
+            CreateCommand::new("purge_user")
+                .description("Purge messages from a specific user")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user whose messages to purge",
+                    )
+                    .required(true),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Integer,
+                        "amount",
+                        "Number of messages to check (default: 100)",
+                    )
+                    .min_int_value(1)
+                    .max_int_value(1000),
+                ),
+            CreateCommand::new("purge_role")
+                .description("Purge messages from users with a specific role")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Role,
+                        "role",
+                        "The role whose messages to purge",
+                    )
+                    .required(true),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Integer,
+                        "amount",
+                        "Number of messages to check (default: 100)",
+                    )
+                    .min_int_value(1)
+                    .max_int_value(1000),
                 ),
         ];
 

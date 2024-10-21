@@ -1,5 +1,6 @@
 use chrono::{Duration, Utc};
 use serenity::all::*;
+use std::future::Future;
 
 async fn check_permissions(
     ctx: &Context,
@@ -391,4 +392,98 @@ pub async fn role_all(ctx: &Context, command: &CommandInteraction) -> String {
         "Role added to {} members. Failed for {} members.",
         success_count, fail_count
     )
+}
+
+pub async fn purge_user(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_MESSAGES).await {
+        return "You don't have permission to manage messages".to_string();
+    }
+
+    let options = &command.data.options;
+    let user = options
+        .iter()
+        .find(|opt| opt.name == "user")
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
+    let amount = options
+        .iter()
+        .find(|opt| opt.name == "amount")
+        .and_then(|opt| opt.value.as_i64())
+        .unwrap_or(100);
+
+    let user_id = user;
+    purge_messages(ctx, command.channel_id, amount, move |msg| {
+        Box::pin(async move { msg.author.id == user_id })
+    })
+    .await
+}
+
+pub async fn purge_role(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_MESSAGES).await {
+        return "You don't have permission to manage messages".to_string();
+    }
+
+    let options = &command.data.options;
+    let role = options
+        .iter()
+        .find(|opt| opt.name == "role")
+        .and_then(|opt| opt.value.as_role_id())
+        .unwrap();
+    let amount = options
+        .iter()
+        .find(|opt| opt.name == "amount")
+        .and_then(|opt| opt.value.as_i64())
+        .unwrap_or(100);
+
+    let guild_id = command.guild_id.unwrap();
+    let ctx_clone = ctx.clone();
+    purge_messages(ctx, command.channel_id, amount, move |msg| {
+        let ctx = ctx_clone.clone();
+        let guild_id = guild_id;
+        let role = role;
+        Box::pin(async move {
+            let member = guild_id.member(&ctx.http, msg.author.id).await;
+            member.map_or(false, |m| m.roles.contains(&role))
+        })
+    })
+    .await
+}
+
+async fn purge_messages<F, Fut>(
+    ctx: &Context,
+    channel_id: ChannelId,
+    amount: i64,
+    filter: F,
+) -> String
+where
+    F: Fn(Message) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = bool> + Send,
+{
+    let amount = amount.min(100) as u8;
+    let messages = channel_id
+        .messages(&ctx.http, GetMessages::default().limit(amount))
+        .await;
+
+    if let Err(why) = messages {
+        return format!("Failed to fetch messages: {}", why);
+    }
+
+    let messages = messages.unwrap();
+    let mut message_ids = Vec::new();
+
+    for msg in messages.into_iter() {
+        if filter(msg.clone()).await {
+            message_ids.push(msg.id);
+        }
+    }
+
+    if message_ids.is_empty() {
+        return "No messages to delete.".to_string();
+    }
+
+    if let Err(why) = channel_id.delete_messages(&ctx.http, &message_ids).await {
+        return format!("Failed to delete messages: {}", why);
+    }
+
+    format!("Successfully purged {} messages", message_ids.len())
 }
