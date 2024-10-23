@@ -221,17 +221,17 @@ pub async fn warn(ctx: &Context, command: &CommandInteraction, pool: &SqlitePool
         .unwrap_or("No reason provided");
 
     let guild_id = command.guild_id.unwrap();
+    let moderator_id = command.user.id;
 
-    add_to_modlog(
-        guild_id,
-        format!("Warned user <@{}> for reason: {}", user, reason),
-    );
+    let action = format!("Warned by <@{}> for reason: {}", moderator_id, reason);
+
+    add_to_modlog(guild_id, format!("User <@{}> {}", user, action));
 
     let query = "INSERT INTO modlog (guild_id, user_id, action) VALUES (?, ?, ?)";
     if let Err(why) = sqlx::query(query)
         .bind(guild_id.get() as i64)
         .bind(user.get() as i64)
-        .bind(format!("Warned: {}", reason))
+        .bind(action)
         .execute(pool)
         .await
     {
@@ -774,6 +774,11 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
 
+    let user = match user_id.to_user(&ctx.http).await {
+        Ok(user) => user,
+        Err(_) => return "Failed to fetch user information".to_string(),
+    };
+
     let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10";
     let logs = sqlx::query_scalar::<_, String>(query)
         .bind(guild_id.get() as i64)
@@ -784,10 +789,10 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
     match logs {
         Ok(actions) => {
             if actions.is_empty() {
-                format!("No moderation actions recorded for <@{}>.", user_id)
+                format!("No moderation actions recorded for {}.", user.name)
             } else {
                 let embed = CreateEmbed::new()
-                    .title(format!("Moderation Log for <@{}>", user_id))
+                    .title(format!("Moderation Log for {}", user.name))
                     .description(actions.join("\n"))
                     .color(0x3498db);
 
