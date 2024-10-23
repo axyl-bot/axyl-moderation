@@ -7,6 +7,8 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::commands::check_permissions;
+
 pub struct LoggingConfig {
     pub log_channels: Arc<RwLock<HashMap<GuildId, ChannelId>>>,
 }
@@ -90,22 +92,6 @@ pub async fn set_log_channel(
     log_channels.insert(guild_id, channel_id);
 
     format!("Log channel set to <#{}>", channel_id)
-}
-
-async fn check_permissions(
-    ctx: &Context,
-    command: &CommandInteraction,
-    required_permission: Permissions,
-) -> bool {
-    let guild_id = command.guild_id.unwrap();
-    let guild = guild_id.to_partial_guild(&ctx.http).await.unwrap();
-    let member = guild.member(&ctx.http, command.user.id).await.unwrap();
-
-    member
-        .permissions
-        .unwrap_or_default()
-        .contains(required_permission)
-        || guild.owner_id == command.user.id
 }
 
 pub async fn load_log_channel(pool: &SqlitePool, guild_id: GuildId) -> Option<ChannelId> {

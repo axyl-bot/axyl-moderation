@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::logging::log_moderation_action;
 
-async fn check_permissions(
+pub async fn check_permissions(
     ctx: &Context,
     command: &CommandInteraction,
     required_permission: Permissions,
