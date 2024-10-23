@@ -2,6 +2,7 @@ use chrono::{DateTime, Duration, Utc};
 use serenity::all::*;
 use serenity::builder::EditChannel;
 use serenity::model::guild::PremiumTier;
+use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -760,33 +761,58 @@ lazy_static::lazy_static! {
     static ref MODLOG: Arc<Mutex<HashMap<GuildId, Vec<String>>>> = Arc::new(Mutex::new(HashMap::new()));
 }
 
-pub async fn modlog(ctx: &Context, command: &CommandInteraction) -> String {
+pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePool) -> String {
     if !check_permissions(ctx, command, Permissions::MANAGE_GUILD).await {
         return "You don't have permission to view the modlog".to_string();
     }
 
     let guild_id = command.guild_id.unwrap();
-    let logs = {
-        let modlog = MODLOG.lock().unwrap();
-        modlog.get(&guild_id).cloned().unwrap_or_default()
+    let user_option = command
+        .data
+        .options
+        .get(0)
+        .and_then(|opt| opt.value.as_str());
+
+    let logs = match user_option {
+        Some(user_name) => {
+            let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_name = ? ORDER BY timestamp DESC LIMIT 10";
+            sqlx::query_scalar::<_, String>(query)
+                .bind(guild_id.get() as i64)
+                .bind(user_name)
+                .fetch_all(pool)
+                .await
+        }
+        None => {
+            let query =
+                "SELECT action FROM modlog WHERE guild_id = ? ORDER BY timestamp DESC LIMIT 10";
+            sqlx::query_scalar::<_, String>(query)
+                .bind(guild_id.get() as i64)
+                .fetch_all(pool)
+                .await
+        }
     };
 
-    if logs.is_empty() {
-        "No moderation actions recorded.".to_string()
-    } else {
-        let embed = CreateEmbed::new()
-            .title("Moderation Log")
-            .description(logs.join("\n"))
-            .color(0x3498db);
+    match logs {
+        Ok(actions) => {
+            if actions.is_empty() {
+                "No moderation actions recorded.".to_string()
+            } else {
+                let embed = CreateEmbed::new()
+                    .title("Moderation Log")
+                    .description(actions.join("\n"))
+                    .color(0x3498db);
 
-        if let Err(why) = command
-            .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(embed))
-            .await
-        {
-            format!("Failed to send modlog: {}", why)
-        } else {
-            "Modlog sent successfully".to_string()
+                if let Err(why) = command
+                    .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(embed))
+                    .await
+                {
+                    format!("Failed to send modlog: {}", why)
+                } else {
+                    "Modlog sent successfully".to_string()
+                }
+            }
         }
+        Err(e) => format!("Failed to fetch modlog: {}", e),
     }
 }
 

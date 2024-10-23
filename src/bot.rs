@@ -5,8 +5,11 @@ use serenity::{
     builder::CreateInteractionResponse,
     model::{gateway::Ready, user::OnlineStatus},
 };
+use sqlx::SqlitePool;
 
-struct Handler;
+struct Handler {
+    pool: SqlitePool,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -41,7 +44,7 @@ impl EventHandler for Handler {
                 "slowmode" => slowmode(&ctx, &command).await,
                 "userinfo" => userinfo(&ctx, &command).await,
                 "serverinfo" => serverinfo(&ctx, &command).await,
-                "modlog" => modlog(&ctx, &command).await,
+                "modlog" => modlog(&ctx, &command, &self.pool).await,
                 "clear_infractions" => clear_infractions(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
@@ -263,11 +266,12 @@ pub async fn run_bot() -> Result<(), Box<dyn std::error::Error>> {
     let token = &config.token;
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
-        | GatewayIntents::GUILDS
-        | GatewayIntents::GUILD_MEMBERS;
+        | GatewayIntents::DIRECT_MESSAGES;
+
+    let pool = SqlitePool::connect("sqlite:axyl_moderation.db").await?;
 
     let mut client = Client::builder(token, intents)
-        .event_handler(Handler)
+        .event_handler(Handler { pool })
         .await?;
 
     client.start().await?;
