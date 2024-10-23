@@ -698,7 +698,6 @@ pub async fn serverinfo(ctx: &Context, command: &CommandInteraction) -> String {
         .await
         .unwrap();
 
-    let member_count = guild.approximate_member_count.unwrap_or(0);
     let role_count = guild.roles.len();
     let text_channels = guild
         .channels(&ctx.http)
@@ -726,10 +725,19 @@ pub async fn serverinfo(ctx: &Context, command: &CommandInteraction) -> String {
         .field("ID", guild.id.to_string(), true)
         .field("Owner", format!("<@{}>", guild.owner_id), true)
         .field("Created At", created_at_str, true)
-        .field("Members", member_count.to_string(), true)
         .field("Roles", role_count.to_string(), true)
         .field("Text Channels", text_channels.to_string(), true)
         .field("Voice Channels", voice_channels.to_string(), true)
+        .field(
+            "Verification Level",
+            format!("{:?}", guild.verification_level),
+            true
+        )
+        .field(
+            "Content Filter",
+            format!("{:?}", guild.explicit_content_filter),
+            true
+        )
         .field(
             "Boost Level",
             match guild.premium_tier {
