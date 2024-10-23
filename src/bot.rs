@@ -26,6 +26,7 @@ impl EventHandler for Handler {
             let content = match command.data.name.as_str() {
                 "kick" => kick(&ctx, &command).await,
                 "ban" => ban(&ctx, &command).await,
+                "unban" => unban(&ctx, &command).await,
                 "mute" => mute(&ctx, &command).await,
                 "unmute" => unmute(&ctx, &command).await,
                 "warn" => warn(&ctx, &command).await,
@@ -35,6 +36,13 @@ impl EventHandler for Handler {
                 "role_all" => role_all(&ctx, &command).await,
                 "purge_user" => purge_user(&ctx, &command).await,
                 "purge_role" => purge_role(&ctx, &command).await,
+                "channel_lock" => channel_lock(&ctx, &command).await,
+                "channel_unlock" => channel_unlock(&ctx, &command).await,
+                "slowmode" => slowmode(&ctx, &command).await,
+                "userinfo" => userinfo(&ctx, &command).await,
+                "serverinfo" => serverinfo(&ctx, &command).await,
+                "modlog" => modlog(&ctx, &command).await,
+                "clear_infractions" => clear_infractions(&ctx, &command).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -99,6 +107,12 @@ impl EventHandler for Handler {
                     "reason",
                     "Reason for banning",
                 )),
+            CreateCommand::new("unban")
+                .description("Unban a user")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::User, "user", "The user to unban")
+                        .required(true),
+                ),
             CreateCommand::new("mute")
                 .description("Mute a user (default: 28 days)")
                 .add_option(
@@ -207,6 +221,34 @@ impl EventHandler for Handler {
                     .min_int_value(1)
                     .max_int_value(1000),
                 ),
+            CreateCommand::new("channel_lock").description("Lock the current channel"),
+            CreateCommand::new("channel_unlock").description("Unlock the current channel"),
+            CreateCommand::new("slowmode")
+                .description("Set slowmode for the current channel")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Integer,
+                        "seconds",
+                        "Slowmode duration in seconds",
+                    )
+                    .required(true)
+                    .min_int_value(0)
+                    .max_int_value(21600),
+                ),
+            CreateCommand::new("userinfo")
+                .description("Display information about a user")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user to get info about",
+                    )
+                    .required(false),
+                ),
+            CreateCommand::new("serverinfo").description("Display information about the server"),
+            CreateCommand::new("modlog").description("View the moderation log"),
+            CreateCommand::new("clear_infractions")
+                .description("Clear all infractions from the modlog"),
         ];
 
         match Command::set_global_commands(&ctx.http, commands).await {

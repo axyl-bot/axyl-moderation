@@ -1,6 +1,10 @@
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serenity::all::*;
+use serenity::builder::EditChannel;
+use serenity::model::guild::PremiumTier;
+use std::collections::HashMap;
 use std::future::Future;
+use std::sync::{Arc, Mutex};
 
 async fn check_permissions(
     ctx: &Context,
@@ -49,6 +53,16 @@ async fn check_permissions(
     false
 }
 
+async fn get_everyone_role(ctx: &Context, guild_id: GuildId) -> Role {
+    let guild = guild_id.to_partial_guild(&ctx.http).await.unwrap();
+    guild
+        .roles
+        .values()
+        .find(|r| r.name == "@everyone")
+        .unwrap()
+        .clone()
+}
+
 pub async fn kick(ctx: &Context, command: &CommandInteraction) -> String {
     if !check_permissions(ctx, command, Permissions::KICK_MEMBERS).await {
         return "You don't have permission to kick members".to_string();
@@ -75,6 +89,11 @@ pub async fn kick(ctx: &Context, command: &CommandInteraction) -> String {
     {
         format!("Failed to kick user: {}", why)
     } else {
+        let entry = format!(
+            "User <@{}> was kicked by <@{}>. Reason: {}",
+            user, command.user.id, reason
+        );
+        add_to_modlog(command.guild_id.unwrap(), entry);
         format!("Successfully kicked <@{}>. Reason: {}", user, reason)
     }
 }
@@ -105,6 +124,11 @@ pub async fn ban(ctx: &Context, command: &CommandInteraction) -> String {
     {
         format!("Failed to ban user: {}", why)
     } else {
+        let entry = format!(
+            "User <@{}> was banned by <@{}>. Reason: {}",
+            user, command.user.id, reason
+        );
+        add_to_modlog(command.guild_id.unwrap(), entry);
         format!("Successfully banned <@{}>. Reason: {}", user, reason)
     }
 }
@@ -486,4 +510,299 @@ where
     }
 
     format!("Successfully purged {} messages", message_ids.len())
+}
+
+pub async fn unban(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::BAN_MEMBERS).await {
+        return "You don't have permission to unban members".to_string();
+    }
+
+    let options = &command.data.options;
+    let user_id = options
+        .iter()
+        .find(|opt| opt.name == "user")
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
+
+    let guild = command.guild_id.unwrap();
+
+    if let Err(why) = guild.unban(&ctx.http, user_id).await {
+        format!("Failed to unban user: {}", why)
+    } else {
+        format!("Successfully unbanned <@{}>", user_id)
+    }
+}
+
+pub async fn channel_lock(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_CHANNELS).await {
+        return "You don't have permission to lock channels".to_string();
+    }
+
+    let channel_id = command.channel_id;
+    let guild = command.guild_id.unwrap();
+    let everyone_role = get_everyone_role(ctx, guild).await;
+
+    let mut channel = channel_id
+        .to_channel(&ctx.http)
+        .await
+        .unwrap()
+        .guild()
+        .unwrap();
+    let mut permissions = channel.permission_overwrites.clone();
+
+    let overwrite = PermissionOverwrite {
+        allow: Permissions::empty(),
+        deny: Permissions::SEND_MESSAGES,
+        kind: PermissionOverwriteType::Role(everyone_role.id),
+    };
+
+    permissions.push(overwrite);
+
+    if let Err(why) = channel
+        .edit(&ctx.http, EditChannel::new().permissions(permissions))
+        .await
+    {
+        format!("Failed to lock channel: {}", why)
+    } else {
+        "Channel locked successfully".to_string()
+    }
+}
+
+pub async fn channel_unlock(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_CHANNELS).await {
+        return "You don't have permission to unlock channels".to_string();
+    }
+
+    let channel_id = command.channel_id;
+    let guild = command.guild_id.unwrap();
+    let everyone_role = get_everyone_role(ctx, guild).await;
+
+    let mut channel = channel_id
+        .to_channel(&ctx.http)
+        .await
+        .unwrap()
+        .guild()
+        .unwrap();
+    let mut permissions = channel.permission_overwrites.clone();
+
+    permissions.retain(|p| p.kind != PermissionOverwriteType::Role(everyone_role.id));
+
+    if let Err(why) = channel
+        .edit(&ctx.http, EditChannel::new().permissions(permissions))
+        .await
+    {
+        format!("Failed to unlock channel: {}", why)
+    } else {
+        "Channel unlocked successfully".to_string()
+    }
+}
+
+pub async fn slowmode(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_CHANNELS).await {
+        return "You don't have permission to change slowmode".to_string();
+    }
+
+    let options = &command.data.options;
+    let seconds = options
+        .iter()
+        .find(|opt| opt.name == "seconds")
+        .and_then(|opt| opt.value.as_i64())
+        .unwrap_or(0);
+
+    let channel_id = command.channel_id;
+    let mut channel = channel_id
+        .to_channel(&ctx.http)
+        .await
+        .unwrap()
+        .guild()
+        .unwrap();
+
+    if let Err(why) = channel
+        .edit(
+            &ctx.http,
+            EditChannel::new().rate_limit_per_user(seconds as u16),
+        )
+        .await
+    {
+        format!("Failed to set slowmode: {}", why)
+    } else {
+        format!("Slowmode set to {} seconds", seconds)
+    }
+}
+
+pub async fn userinfo(ctx: &Context, command: &CommandInteraction) -> String {
+    let options = &command.data.options;
+    let user_id = options
+        .iter()
+        .find(|opt| opt.name == "user")
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap_or(command.user.id);
+
+    let guild = command.guild_id.unwrap();
+    let member = guild.member(&ctx.http, user_id).await.unwrap();
+    let user = &member.user;
+
+    let guild = command
+        .guild_id
+        .unwrap()
+        .to_partial_guild(&ctx.http)
+        .await
+        .unwrap();
+    let roles: Vec<&Role> = member
+        .roles
+        .iter()
+        .filter_map(|role_id| guild.roles.get(role_id))
+        .collect();
+    let role_names: Vec<String> = roles.iter().map(|r| r.name.clone()).collect();
+
+    let created_at: DateTime<Utc> =
+        DateTime::from_timestamp(user.created_at().unix_timestamp(), 0).unwrap();
+    let joined_at: DateTime<Utc> =
+        DateTime::from_timestamp(member.joined_at.unwrap().unix_timestamp(), 0).unwrap();
+
+    let created_at_str = created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let joined_at_str = joined_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+
+    let embed = CreateEmbed::new()
+        .title(format!("User Info - {}", user.name))
+        .thumbnail(user.face())
+        .color(0x3498db)
+        .field("ID", user.id.to_string(), true)
+        .field(
+            "Nickname",
+            member.nick.unwrap_or_else(|| "None".to_string()),
+            true,
+        )
+        .field("Created At", created_at_str, true)
+        .field("Joined At", joined_at_str, true)
+        .field("Roles", role_names.join(", "), false)
+        .field("Bot", user.bot.to_string(), true)
+        .field("Boosting", member.premium_since.is_some().to_string(), true);
+
+    if let Err(why) = command
+        .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(embed))
+        .await
+    {
+        format!("Failed to send userinfo: {}", why)
+    } else {
+        "Userinfo sent successfully".to_string()
+    }
+}
+
+pub async fn serverinfo(ctx: &Context, command: &CommandInteraction) -> String {
+    let guild = command
+        .guild_id
+        .unwrap()
+        .to_partial_guild(&ctx.http)
+        .await
+        .unwrap();
+
+    let member_count = guild.approximate_member_count.unwrap_or(0);
+    let role_count = guild.roles.len();
+    let text_channels = guild
+        .channels(&ctx.http)
+        .await
+        .unwrap()
+        .values()
+        .filter(|c| c.kind == ChannelType::Text)
+        .count();
+    let voice_channels = guild
+        .channels(&ctx.http)
+        .await
+        .unwrap()
+        .values()
+        .filter(|c| c.kind == ChannelType::Voice)
+        .count();
+
+    let created_at: DateTime<Utc> =
+        DateTime::from_timestamp(guild.id.created_at().unix_timestamp(), 0).unwrap();
+    let created_at_str = created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+
+    let embed = CreateEmbed::new()
+        .title(format!("Server Info - {}", guild.name))
+        .thumbnail(guild.icon_url().unwrap_or_default())
+        .color(0x3498db)
+        .field("ID", guild.id.to_string(), true)
+        .field("Owner", format!("<@{}>", guild.owner_id), true)
+        .field("Created At", created_at_str, true)
+        .field("Members", member_count.to_string(), true)
+        .field("Roles", role_count.to_string(), true)
+        .field("Text Channels", text_channels.to_string(), true)
+        .field("Voice Channels", voice_channels.to_string(), true)
+        .field(
+            "Boost Level",
+            match guild.premium_tier {
+                PremiumTier::Tier0 => "0",
+                PremiumTier::Tier1 => "1",
+                PremiumTier::Tier2 => "2",
+                PremiumTier::Tier3 => "3",
+                _ => "Unknown",
+            },
+            true,
+        )
+        .field(
+            "Boost Count",
+            guild.premium_subscription_count.unwrap_or(0).to_string(),
+            true,
+        );
+
+    if let Err(why) = command
+        .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(embed))
+        .await
+    {
+        format!("Failed to send serverinfo: {}", why)
+    } else {
+        "Serverinfo sent successfully".to_string()
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref MODLOG: Arc<Mutex<HashMap<GuildId, Vec<String>>>> = Arc::new(Mutex::new(HashMap::new()));
+}
+
+pub async fn modlog(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_GUILD).await {
+        return "You don't have permission to view the modlog".to_string();
+    }
+
+    let guild_id = command.guild_id.unwrap();
+    let logs = {
+        let modlog = MODLOG.lock().unwrap();
+        modlog.get(&guild_id).cloned().unwrap_or_default()
+    };
+
+    if logs.is_empty() {
+        "No moderation actions recorded.".to_string()
+    } else {
+        let embed = CreateEmbed::new()
+            .title("Moderation Log")
+            .description(logs.join("\n"))
+            .color(0x3498db);
+
+        if let Err(why) = command
+            .edit_response(&ctx.http, EditInteractionResponse::new().add_embed(embed))
+            .await
+        {
+            format!("Failed to send modlog: {}", why)
+        } else {
+            "Modlog sent successfully".to_string()
+        }
+    }
+}
+
+pub async fn clear_infractions(ctx: &Context, command: &CommandInteraction) -> String {
+    if !check_permissions(ctx, command, Permissions::MANAGE_GUILD).await {
+        return "You don't have permission to clear infractions".to_string();
+    }
+
+    let guild_id = command.guild_id.unwrap();
+    let mut modlog = MODLOG.lock().unwrap();
+    modlog.remove(&guild_id);
+
+    "All infractions have been cleared from the modlog.".to_string()
+}
+
+pub fn add_to_modlog(guild_id: GuildId, entry: String) {
+    let mut modlog = MODLOG.lock().unwrap();
+    modlog.entry(guild_id).or_insert_with(Vec::new).push(entry);
 }
