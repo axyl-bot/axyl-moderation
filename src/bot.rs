@@ -45,7 +45,7 @@ impl EventHandler for Handler {
                 "userinfo" => userinfo(&ctx, &command).await,
                 "serverinfo" => serverinfo(&ctx, &command).await,
                 "modlog" => modlog(&ctx, &command, &self.pool).await,
-                "clear_infractions" => clear_infractions(&ctx, &command).await,
+                "clear_infractions" => clear_infractions(&ctx, &command, &self.pool).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -249,9 +249,26 @@ impl EventHandler for Handler {
                     .required(false),
                 ),
             CreateCommand::new("serverinfo").description("Display information about the server"),
-            CreateCommand::new("modlog").description("View the moderation log"),
+            CreateCommand::new("modlog")
+                .description("View the moderation log for a specific user")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user to view the modlog for",
+                    )
+                    .required(true),
+                ),
             CreateCommand::new("clear_infractions")
-                .description("Clear all infractions from the modlog"),
+                .description("Clear all infractions for a specific user from the modlog")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::User,
+                        "user",
+                        "The user to clear infractions for",
+                    )
+                    .required(true),
+                ),
         ];
 
         match Command::set_global_commands(&ctx.http, commands).await {

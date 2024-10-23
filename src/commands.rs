@@ -767,38 +767,27 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
     }
 
     let guild_id = command.guild_id.unwrap();
-    let user_option = command
+    let user = command
         .data
         .options
         .get(0)
-        .and_then(|opt| opt.value.as_str());
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
 
-    let logs = match user_option {
-        Some(user_name) => {
-            let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_name = ? ORDER BY timestamp DESC LIMIT 10";
-            sqlx::query_scalar::<_, String>(query)
-                .bind(guild_id.get() as i64)
-                .bind(user_name)
-                .fetch_all(pool)
-                .await
-        }
-        None => {
-            let query =
-                "SELECT action FROM modlog WHERE guild_id = ? ORDER BY timestamp DESC LIMIT 10";
-            sqlx::query_scalar::<_, String>(query)
-                .bind(guild_id.get() as i64)
-                .fetch_all(pool)
-                .await
-        }
-    };
+    let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10";
+    let logs = sqlx::query_scalar::<_, String>(query)
+        .bind(guild_id.get() as i64)
+        .bind(user.get() as i64)
+        .fetch_all(pool)
+        .await;
 
     match logs {
         Ok(actions) => {
             if actions.is_empty() {
-                "No moderation actions recorded.".to_string()
+                format!("No moderation actions recorded for <@{}>.", user)
             } else {
                 let embed = CreateEmbed::new()
-                    .title("Moderation Log")
+                    .title(format!("Moderation Log for <@{}>", user))
                     .description(actions.join("\n"))
                     .color(0x3498db);
 
@@ -816,16 +805,42 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
     }
 }
 
-pub async fn clear_infractions(ctx: &Context, command: &CommandInteraction) -> String {
+pub async fn clear_infractions(
+    ctx: &Context,
+    command: &CommandInteraction,
+    pool: &SqlitePool,
+) -> String {
     if !check_permissions(ctx, command, Permissions::MANAGE_GUILD).await {
         return "You don't have permission to clear infractions".to_string();
     }
 
     let guild_id = command.guild_id.unwrap();
-    let mut modlog = MODLOG.lock().unwrap();
-    modlog.remove(&guild_id);
+    let user = command
+        .data
+        .options
+        .get(0)
+        .and_then(|opt| opt.value.as_user_id())
+        .unwrap();
 
-    "All infractions have been cleared from the modlog.".to_string()
+    let query = "DELETE FROM modlog WHERE guild_id = ? AND user_id = ?";
+    match sqlx::query(query)
+        .bind(guild_id.get() as i64)
+        .bind(user.get() as i64)
+        .execute(pool)
+        .await
+    {
+        Ok(result) => {
+            if result.rows_affected() > 0 {
+                format!(
+                    "All infractions for <@{}> have been cleared from the modlog.",
+                    user
+                )
+            } else {
+                format!("No infractions found for <@{}>.", user)
+            }
+        }
+        Err(e) => format!("Failed to clear infractions: {}", e),
+    }
 }
 
 pub fn add_to_modlog(guild_id: GuildId, entry: String) {
