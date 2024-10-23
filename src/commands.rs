@@ -203,9 +203,9 @@ pub async fn unmute(ctx: &Context, command: &CommandInteraction) -> String {
     }
 }
 
-pub async fn warn(ctx: &Context, command: &CommandInteraction) -> String {
+pub async fn warn(ctx: &Context, command: &CommandInteraction, pool: &SqlitePool) -> String {
     if !check_permissions(ctx, command, Permissions::MODERATE_MEMBERS).await {
-        return "You don't have permission to warn members".to_string();
+        return "You don't have permission to warn users".to_string();
     }
 
     let options = &command.data.options;
@@ -214,31 +214,31 @@ pub async fn warn(ctx: &Context, command: &CommandInteraction) -> String {
         .find(|opt| opt.name == "user")
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
-
     let reason = options
         .iter()
         .find(|opt| opt.name == "reason")
         .and_then(|opt| opt.value.as_str())
         .unwrap_or("No reason provided");
 
-    let dm_channel = user.create_dm_channel(&ctx.http).await;
+    let guild_id = command.guild_id.unwrap();
 
-    match dm_channel {
-        Ok(channel) => {
-            if let Err(why) = channel
-                .say(
-                    &ctx.http,
-                    &format!("You have been warned. Reason: {}", reason),
-                )
-                .await
-            {
-                format!("Failed to send warning DM: {}", why)
-            } else {
-                format!("Successfully warned <@{}>. Reason: {}", user, reason)
-            }
-        }
-        Err(_) => format!("Failed to create DM channel for <@{}>", user),
+    add_to_modlog(
+        guild_id,
+        format!("Warned user <@{}> for reason: {}", user, reason),
+    );
+
+    let query = "INSERT INTO modlog (guild_id, user_id, action) VALUES (?, ?, ?)";
+    if let Err(why) = sqlx::query(query)
+        .bind(guild_id.get() as i64)
+        .bind(user.get() as i64)
+        .bind(format!("Warned: {}", reason))
+        .execute(pool)
+        .await
+    {
+        println!("Error inserting into modlog: {:?}", why);
     }
+
+    format!("Successfully warned <@{}>. Reason: {}", user, reason)
 }
 
 pub async fn strip_roles(ctx: &Context, command: &CommandInteraction) -> String {
@@ -774,25 +774,20 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
 
-    let user = match user_id.to_user(&ctx.http).await {
-        Ok(user) => user,
-        Err(_) => return "Failed to fetch user information".to_string(),
-    };
-
-    let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_name = ? ORDER BY timestamp DESC LIMIT 10";
+    let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10";
     let logs = sqlx::query_scalar::<_, String>(query)
         .bind(guild_id.get() as i64)
-        .bind(&user.name)
+        .bind(user_id.get() as i64)
         .fetch_all(pool)
         .await;
 
     match logs {
         Ok(actions) => {
             if actions.is_empty() {
-                format!("No moderation actions recorded for {}.", user.name)
+                format!("No moderation actions recorded for <@{}>.", user_id)
             } else {
                 let embed = CreateEmbed::new()
-                    .title(format!("Moderation Log for {}", user.name))
+                    .title(format!("Moderation Log for <@{}>", user_id))
                     .description(actions.join("\n"))
                     .color(0x3498db);
 
@@ -827,26 +822,21 @@ pub async fn clear_infractions(
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
 
-    let user = match user_id.to_user(&ctx.http).await {
-        Ok(user) => user,
-        Err(_) => return "Failed to fetch user information".to_string(),
-    };
-
-    let query = "DELETE FROM modlog WHERE guild_id = ? AND user_name = ?";
+    let query = "DELETE FROM modlog WHERE guild_id = ? AND user_id = ?";
     match sqlx::query(query)
         .bind(guild_id.get() as i64)
-        .bind(&user.name)
+        .bind(user_id.get() as i64)
         .execute(pool)
         .await
     {
         Ok(result) => {
             if result.rows_affected() > 0 {
                 format!(
-                    "All infractions for {} have been cleared from the modlog.",
-                    user.name
+                    "All infractions for <@{}> have been cleared from the modlog.",
+                    user_id
                 )
             } else {
-                format!("No infractions found for {}.", user.name)
+                format!("No infractions found for <@{}>.", user_id)
             }
         }
         Err(e) => format!("Failed to clear infractions: {}", e),

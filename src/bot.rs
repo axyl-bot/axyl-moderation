@@ -32,7 +32,7 @@ impl EventHandler for Handler {
                 "unban" => unban(&ctx, &command).await,
                 "mute" => mute(&ctx, &command).await,
                 "unmute" => unmute(&ctx, &command).await,
-                "warn" => warn(&ctx, &command).await,
+                "warn" => warn(&ctx, &command, &self.pool).await,
                 "strip_roles" => strip_roles(&ctx, &command).await,
                 "purge" => purge(&ctx, &command).await,
                 "mass_role" => mass_role(&ctx, &command).await,
