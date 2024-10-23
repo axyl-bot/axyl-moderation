@@ -1,6 +1,7 @@
 mod bot;
 mod commands;
 mod config;
+mod logging;
 
 use bot::run_bot;
 

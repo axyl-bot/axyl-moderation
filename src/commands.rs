@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
+use crate::logging::log_moderation_action;
+
 async fn check_permissions(
     ctx: &Context,
     command: &CommandInteraction,
@@ -90,11 +92,15 @@ pub async fn kick(ctx: &Context, command: &CommandInteraction) -> String {
     {
         format!("Failed to kick user: {}", why)
     } else {
-        let entry = format!(
-            "User <@{}> was kicked by <@{}>. Reason: {}",
-            user, command.user.id, reason
-        );
-        add_to_modlog(command.guild_id.unwrap(), entry);
+        log_moderation_action(
+            ctx,
+            command.guild_id.unwrap(),
+            &command.user,
+            &user.to_user(&ctx.http).await.unwrap(),
+            "Kick",
+            Some(reason),
+        )
+        .await;
         format!("Successfully kicked <@{}>. Reason: {}", user, reason)
     }
 }
@@ -125,11 +131,15 @@ pub async fn ban(ctx: &Context, command: &CommandInteraction) -> String {
     {
         format!("Failed to ban user: {}", why)
     } else {
-        let entry = format!(
-            "User <@{}> was banned by <@{}>. Reason: {}",
-            user, command.user.id, reason
-        );
-        add_to_modlog(command.guild_id.unwrap(), entry);
+        log_moderation_action(
+            ctx,
+            command.guild_id.unwrap(),
+            &command.user,
+            &user.to_user(&ctx.http).await.unwrap(),
+            "Ban",
+            Some(reason),
+        )
+        .await;
         format!("Successfully banned <@{}>. Reason: {}", user, reason)
     }
 }
@@ -168,6 +178,15 @@ pub async fn mute(ctx: &Context, command: &CommandInteraction) -> String {
         .await
     {
         Ok(_) => {
+            log_moderation_action(
+                ctx,
+                guild,
+                &command.user,
+                &user.to_user(&ctx.http).await.unwrap(),
+                "Mute",
+                Some(&format!("Duration: {} minutes", duration)),
+            )
+            .await;
             if duration == 28 * 24 * 60 {
                 format!(
                     "Successfully muted <@{}> for 28 days (maximum duration)",
@@ -199,6 +218,15 @@ pub async fn unmute(ctx: &Context, command: &CommandInteraction) -> String {
     if let Err(why) = member.enable_communication(&ctx.http).await {
         format!("Failed to unmute user: {}", why)
     } else {
+        log_moderation_action(
+            ctx,
+            guild,
+            &command.user,
+            &user.to_user(&ctx.http).await.unwrap(),
+            "Unmute",
+            None,
+        )
+        .await;
         format!("Successfully unmuted <@{}>", user)
     }
 }
@@ -237,6 +265,16 @@ pub async fn warn(ctx: &Context, command: &CommandInteraction, pool: &SqlitePool
     {
         println!("Error inserting into modlog: {:?}", why);
     }
+
+    log_moderation_action(
+        ctx,
+        guild_id,
+        &command.user,
+        &user.to_user(&ctx.http).await.unwrap(),
+        "Warn",
+        Some(reason),
+    )
+    .await;
 
     format!("Successfully warned <@{}>. Reason: {}", user, reason)
 }
@@ -530,6 +568,15 @@ pub async fn unban(ctx: &Context, command: &CommandInteraction) -> String {
     if let Err(why) = guild.unban(&ctx.http, user_id).await {
         format!("Failed to unban user: {}", why)
     } else {
+        log_moderation_action(
+            ctx,
+            guild,
+            &command.user,
+            &user_id.to_user(&ctx.http).await.unwrap(),
+            "Unban",
+            None,
+        )
+        .await;
         format!("Successfully unbanned <@{}>", user_id)
     }
 }
@@ -731,12 +778,12 @@ pub async fn serverinfo(ctx: &Context, command: &CommandInteraction) -> String {
         .field(
             "Verification Level",
             format!("{:?}", guild.verification_level),
-            true
+            true,
         )
         .field(
             "Content Filter",
             format!("{:?}", guild.explicit_content_filter),
-            true
+            true,
         )
         .field(
             "Boost Level",

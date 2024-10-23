@@ -1,4 +1,8 @@
-use crate::{commands::*, config::Config};
+use crate::{
+    commands::*,
+    config::Config,
+    logging::{load_log_channel, set_log_channel, LoggingConfig},
+};
 use serenity::{
     all::*,
     async_trait,
@@ -46,6 +50,7 @@ impl EventHandler for Handler {
                 "serverinfo" => serverinfo(&ctx, &command).await,
                 "modlog" => modlog(&ctx, &command, &self.pool).await,
                 "clear_infractions" => clear_infractions(&ctx, &command, &self.pool).await,
+                "set_log_channel" => set_log_channel(&ctx, &command, &self.pool).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -269,11 +274,30 @@ impl EventHandler for Handler {
                     )
                     .required(true),
                 ),
+            CreateCommand::new("set_log_channel")
+                .description("Set the channel for moderation logs")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Channel,
+                        "channel",
+                        "The channel to set for moderation logs",
+                    )
+                    .required(true),
+                ),
         ];
 
         match Command::set_global_commands(&ctx.http, commands).await {
             Ok(cmds) => println!("Successfully registered {} global commands", cmds.len()),
             Err(why) => println!("Failed to register global commands: {:?}", why),
+        }
+
+        for guild_id in ready.guilds.iter().map(|g| g.id) {
+            if let Some(channel_id) = load_log_channel(&self.pool, guild_id).await {
+                let data = ctx.data.read().await;
+                let logging_config = data.get::<LoggingConfig>().unwrap();
+                let mut log_channels = logging_config.log_channels.write().await;
+                log_channels.insert(guild_id, channel_id);
+            }
         }
     }
 }
@@ -288,8 +312,13 @@ pub async fn run_bot() -> Result<(), Box<dyn std::error::Error>> {
     let pool = SqlitePool::connect("sqlite:axyl_moderation.db").await?;
 
     let mut client = Client::builder(token, intents)
-        .event_handler(Handler { pool })
+        .event_handler(Handler { pool: pool.clone() })
         .await?;
+
+    {
+        let mut data = client.data.write().await;
+        data.insert::<LoggingConfig>(LoggingConfig::new());
+    }
 
     client.start().await?;
 
