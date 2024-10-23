@@ -767,27 +767,32 @@ pub async fn modlog(ctx: &Context, command: &CommandInteraction, pool: &SqlitePo
     }
 
     let guild_id = command.guild_id.unwrap();
-    let user = command
+    let user_id = command
         .data
         .options
         .get(0)
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
 
-    let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10";
+    let user = match user_id.to_user(&ctx.http).await {
+        Ok(user) => user,
+        Err(_) => return "Failed to fetch user information".to_string(),
+    };
+
+    let query = "SELECT action FROM modlog WHERE guild_id = ? AND user_name = ? ORDER BY timestamp DESC LIMIT 10";
     let logs = sqlx::query_scalar::<_, String>(query)
         .bind(guild_id.get() as i64)
-        .bind(user.get() as i64)
+        .bind(&user.name)
         .fetch_all(pool)
         .await;
 
     match logs {
         Ok(actions) => {
             if actions.is_empty() {
-                format!("No moderation actions recorded for <@{}>.", user)
+                format!("No moderation actions recorded for {}.", user.name)
             } else {
                 let embed = CreateEmbed::new()
-                    .title(format!("Moderation Log for <@{}>", user))
+                    .title(format!("Moderation Log for {}", user.name))
                     .description(actions.join("\n"))
                     .color(0x3498db);
 
@@ -815,28 +820,33 @@ pub async fn clear_infractions(
     }
 
     let guild_id = command.guild_id.unwrap();
-    let user = command
+    let user_id = command
         .data
         .options
         .get(0)
         .and_then(|opt| opt.value.as_user_id())
         .unwrap();
 
-    let query = "DELETE FROM modlog WHERE guild_id = ? AND user_id = ?";
+    let user = match user_id.to_user(&ctx.http).await {
+        Ok(user) => user,
+        Err(_) => return "Failed to fetch user information".to_string(),
+    };
+
+    let query = "DELETE FROM modlog WHERE guild_id = ? AND user_name = ?";
     match sqlx::query(query)
         .bind(guild_id.get() as i64)
-        .bind(user.get() as i64)
+        .bind(&user.name)
         .execute(pool)
         .await
     {
         Ok(result) => {
             if result.rows_affected() > 0 {
                 format!(
-                    "All infractions for <@{}> have been cleared from the modlog.",
-                    user
+                    "All infractions for {} have been cleared from the modlog.",
+                    user.name
                 )
             } else {
-                format!("No infractions found for <@{}>.", user)
+                format!("No infractions found for {}.", user.name)
             }
         }
         Err(e) => format!("Failed to clear infractions: {}", e),
